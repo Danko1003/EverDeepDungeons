@@ -3,5 +3,7 @@
   "engineVersion": "0.1.0-SNAPSHOT",
   "mainClass": "com.varcore.game.Main",
   "template": "blank",
-  "created": "2026-06-28T00:32:49.054262700Z"
+  "created": "2026-06-28T00:32:49.054262700Z",
+  "engineUpdated": "2026-07-01T21:55:36.985529500Z",
+  "studioInstall": "C:\\Users\\koivu\\Desktop\\VarCore Official"
 }

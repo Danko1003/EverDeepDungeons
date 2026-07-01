@@ -2,18 +2,14 @@ package com.varcore.game.TilesAndGrids;
 
 public class Tile 
 {
-    private int textureId;
     private final int idTile;
-
-
-
+    private final int textureId;
     private TileType type;
     private boolean walkable;
     public enum TileType
     {
         WALL, FLOOR
     }
-
 
     public Tile(int id, TileType type, boolean collsion, int textureId)
     {
@@ -26,6 +22,19 @@ public class Tile
     public int getId() {
         return idTile;
     }
+
+    public int getTextureId() {
+        return textureId;
+    }
+
+
+
+
+
+
+
+
+
 }
 
 

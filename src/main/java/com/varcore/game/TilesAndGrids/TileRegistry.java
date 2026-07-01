@@ -47,6 +47,6 @@ public class TileRegistry
         // ID, Type, Solid, Texture ID
 
         registerTile(new Tile(1, Tile.TileType.FLOOR, false, 1));
-        registerTile(new Tile(2, Tile.TileType.WALL, true, 2));
+        registerTile(new Tile(2, Tile.TileType.FLOOR, false, 2));
     }
 }

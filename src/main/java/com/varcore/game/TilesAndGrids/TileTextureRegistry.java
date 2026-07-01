@@ -8,74 +8,152 @@ import javax.imageio.ImageIO;
 
 public class TileTextureRegistry 
 {
-    private final HashMap<Integer, String> texturePaths = new HashMap<>();
+    private final HashMap<Integer, String> sheetPaths = new HashMap<>();
+    private final HashMap<Integer, BufferedImage> loadedSheets = new HashMap<>();
+    private final HashMap<Integer, TextureRegion> textureRegions = new HashMap<>();
     private final HashMap<Integer, BufferedImage> loadedTextures = new HashMap<>();
+
     private BufferedImage missingTexture;
-    private static final int missingTextureID = 0;
+
+    private static final int MISSING_TEXTURE_ID = 0;
+    private static final int MISSING_SHEET_ID = 0;
 
     public TileTextureRegistry()
     {
-        addTexturePaths();
+        addSheetPaths();
+        addTextureRegions();
         loadMissingTexture();
     }
 
-    public BufferedImage getTexture(int textureID) //texture 0 will be id for the missing texture tile asset
+    public BufferedImage getTexture(int textureID)
     {
-        BufferedImage img;
-        if (!texturePaths.containsKey(textureID)) return missingTexture;
+        if (!textureRegions.containsKey(textureID))
+        {
+            return missingTexture;
+        }
+
         if (loadedTextures.containsKey(textureID))
         {
             return loadedTextures.get(textureID);
         }
-        File file = new File(texturePaths.get(textureID));
-        try
+
+        TextureRegion region = textureRegions.get(textureID);
+        BufferedImage sheet = getSheet(region.sheetID);
+
+        if (sheet == null)
         {
-            img = ImageIO.read(file);
-            loadedTextures.put(textureID, img);
-            return img;
-        }
-        catch (Exception e) 
-        {
-            System.err.print(e);
             return missingTexture;
         }
-        
+
+        try
+        {
+            BufferedImage texture = sheet.getSubimage(
+                region.x,
+                region.y,
+                region.width,
+                region.height
+            );
+
+            loadedTextures.put(textureID, texture);
+            return texture;
+        }
+        catch (Exception e)
+        {
+            System.err.println("Failed to crop texture ID " + textureID + ": " + e.getMessage());
+            return missingTexture;
+        }
+    }
+
+    private BufferedImage getSheet(int sheetID)
+    {
+        if (!sheetPaths.containsKey(sheetID))
+        {
+            return null;
+        }
+
+        if (loadedSheets.containsKey(sheetID))
+        {
+            return loadedSheets.get(sheetID);
+        }
+
+        try
+        {
+            BufferedImage sheet = ImageIO.read(new File(sheetPaths.get(sheetID)));
+
+            if (sheet == null)
+            {
+                return null;
+            }
+
+            loadedSheets.put(sheetID, sheet);
+            return sheet;
+        }
+        catch (Exception e)
+        {
+            System.err.println("Failed to load sheet ID " + sheetID + ": " + e.getMessage());
+            return null;
+        }
     }
 
     private void loadMissingTexture()
     {
-        try
-        {
-            missingTexture = ImageIO.read(new File(texturePaths.get(0)));
+        BufferedImage texture = getTexture(MISSING_TEXTURE_ID);
 
-            if (missingTexture == null)
-            {
-                throw new RuntimeException("Missing texture file could not be read.");
-            }
-
-            loadedTextures.put(missingTextureID, missingTexture);
-        }
-        catch (Exception e)
+        if (texture == null)
         {
-            throw new RuntimeException("CRITICAL: Missing texture ID: " + 0 + ", failed to load.", e);
+            throw new RuntimeException("CRITICAL: Missing texture failed to load.");
         }
+
+        missingTexture = texture;
+        loadedTextures.put(MISSING_TEXTURE_ID, missingTexture);
     }
 
-    public void unloadTexture(int key)
+    public void unloadTexture(int textureID)
     {
-        if (key == missingTextureID) return;
-        loadedTextures.remove(key);
+        if (textureID == MISSING_TEXTURE_ID) return;
+        loadedTextures.remove(textureID);
+    }
+
+    public void unloadSheet(int sheetID)
+    {
+        if (sheetID == MISSING_SHEET_ID) return;
+
+        loadedSheets.remove(sheetID);
+
+        loadedTextures.entrySet().removeIf(entry -> {
+            TextureRegion region = textureRegions.get(entry.getKey());
+            return region != null && region.sheetID == sheetID;
+        });
     }
 
     public void unloadAllTextures()
     {
         loadedTextures.clear();
-        loadedTextures.put(missingTextureID, missingTexture);
+        loadedTextures.put(MISSING_TEXTURE_ID, missingTexture);
     }
 
-    private void addTexturePaths() //I will manually add the paths so I can reuse them later
+    public void unloadAllSheets()
     {
-        texturePaths.put(0, "Missing Texxture asset path");
-        texturePaths.put(1, "THIS WONT WORK CAUSE THIS AINT A PATH BUT A PLACEHOLDER FOR NOW");
+        loadedSheets.clear();
+        getSheet(MISSING_SHEET_ID);
+        loadedTextures.clear();
+        loadedTextures.put(MISSING_TEXTURE_ID, missingTexture);
+    }
+
+    private void addSheetPaths()
+    {
+        sheetPaths.put(0, "assets/Tiles/MissingTexture.png");
+        sheetPaths.put(1, "assets/Tiles/StoneFloor.png");
+    }
+
+    private void addTextureRegions()
+    {
+        textureRegions.put(0, new TextureRegion(0, 0, 0, 32, 32));
+        textureRegions.put(1, new TextureRegion(1, 0, 32, 32, 32)); //Stone1
+        textureRegions.put(2, new TextureRegion(1, 32, 32, 32, 32)); //Stone2
+        textureRegions.put(3, new TextureRegion(1, 0, 0, 32, 32)); //GrassMid
+        textureRegions.put(4, new TextureRegion(1, 0, 32, 32, 32)); //GrassSide
+        textureRegions.put(5, new TextureRegion(1, 0, 64, 32, 32)); //GrassCorner
+        
     }
 }

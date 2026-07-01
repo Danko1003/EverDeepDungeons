@@ -1,30 +1,70 @@
 package com.varcore.game;
 
+import java.awt.event.KeyEvent;
+
 import com.varcore.engine.core.Game;
 import com.varcore.engine.render.Renderer;
-import java.awt.Color;
+import com.varcore.game.TilesAndGrids.*;
 
-public class Main extends Game {
-    public Main() {
-        super("Blank Project", 800, 600);
+public class Main extends Game 
+{
+    private TileRegistry tileRegistry;
+    private TileTextureRegistry textureRegistry;
+    private GridRenderer gridRenderer;
+    private GridManager grid;
+    private CamGame camera;
+    private Inputs inputs;
+
+    public Main() 
+    {
+        super("Tile Render Test", 800, 600);
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) 
+    {
         new Main().run();
     }
 
     @Override
-    protected void onStart() {
+    protected void onStart() 
+    {
         super.onStart();
         getScenes().createScene("main");
+
+        tileRegistry = new TileRegistry();
+        textureRegistry = new TileTextureRegistry();
+        gridRenderer = new GridRenderer(tileRegistry, textureRegistry);
+        inputs = new Inputs();
+
+        grid = new GridManager(10, 8, 32, 100, 100);
+        camera = new CamGame(0, 0, 1);
+        for (int y = 0; y < grid.getHeight(); y++)
+        {
+            for (int x = 0; x < grid.getWidth(); x++)
+            {
+                if ((x + y) % 2 == 0)
+                {
+                    grid.setTileId(x, y, 1);
+                }
+                else
+                {
+                    grid.setTileId(x, y, 2);
+                }
+            }
+        }
     }
 
     @Override
-    protected void update(float dt) {}
+    protected void update(float dt) 
+    {
+        inputs.camInputs(getInput(), camera);
+    }
 
     @Override
-    protected void render(Renderer renderer) {
+    protected void render(Renderer renderer) 
+    {
         super.render(renderer);
-        renderer.drawRect(100, 100, 200, 150, new Color(0x5B, 0x8C, 0xFF), true, 0);
+
+        gridRenderer.render(renderer, grid, camera, 0);
     }
 }
