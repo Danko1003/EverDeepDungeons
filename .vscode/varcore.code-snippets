@@ -1,0 +1,123 @@
+{
+  "VarCore input — key down": {
+    "scope": "java",
+    "prefix": "vc-input",
+    "body": [
+      "if (getInput().isKeyDown(${1:java.awt.event.KeyEvent.VK_SPACE})) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "VarCore snippet — keyboard check via getInput()"
+  },
+  "VarCore input — movement vector": {
+    "scope": "java",
+    "prefix": "vc-input-move",
+    "body": [
+      "Vector2 move \u003d getInput().getMovementVector();",
+      "move.scale(${1:220f} * dt);",
+      "${2:playerPos}.add(move.x, move.y);",
+      "$0"
+    ],
+    "description": "VarCore snippet — WASD / arrow movement"
+  },
+  "VarCore input — mouse world": {
+    "scope": "java",
+    "prefix": "vc-input-mouse",
+    "body": [
+      "Vector2 mouse \u003d getInput().getMouseWorldPosition();",
+      "if (getInput().isMouseClicked(${1:java.awt.event.MouseEvent.BUTTON1})) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "VarCore snippet — mouse world position and click"
+  },
+  "VarCore spawn VarObject": {
+    "scope": "java",
+    "prefix": "vc-spawn",
+    "body": [
+      "VarObjectDefinition def \u003d getAssets().loadVarObject(\"${1:enemy.varobject}\");",
+      "GameObject obj \u003d VarObjectSpawner.spawn(def, getAssets());",
+      "${2:getScenes().getActiveScene()}.add(obj);",
+      "$0"
+    ],
+    "description": "VarCore snippet — load and spawn a VarObject"
+  },
+  "VarCore tilemap setup": {
+    "scope": "java",
+    "prefix": "vc-tilemap",
+    "body": [
+      "GameObject mapObj \u003d new GameObject(\"tilemap\");",
+      "TileMapComponent tileMap \u003d mapObj.addComponent(new TileMapComponent());",
+      "tileMap.setLibrary(${1:library});",
+      "tileMap.resizeMap(${2:40}, ${3:28});",
+      "tileMap.generate(${4:generator}, ${5:42L});",
+      "${6:getScenes().getActiveScene()}.add(mapObj);",
+      "$0"
+    ],
+    "description": "VarCore snippet — TileMapComponent setup"
+  },
+  "VarCore GameObject": {
+    "scope": "java",
+    "prefix": "vc-gameobject",
+    "body": [
+      "GameObject ${1:obj} \u003d new GameObject(\"${2:name}\");",
+      "${1:obj}.getTransform().setPosition(${3:0f}, ${4:0f});",
+      "getScenes().getActiveScene().add(${1:obj});",
+      "$0"
+    ],
+    "description": "VarCore snippet — create a GameObject"
+  },
+  "VarCore particle burst": {
+    "scope": "java",
+    "prefix": "vc-particle",
+    "body": [
+      "ParticleEmitter emitter \u003d ${1:obj}.addComponent(new ParticleEmitter());",
+      "emitter.burst(${2:24});",
+      "$0"
+    ],
+    "description": "VarCore snippet — particle burst"
+  },
+  "VarCore collision raycast": {
+    "scope": "java",
+    "prefix": "vc-collision",
+    "body": [
+      "CollisionHit hit \u003d getCollision().raycast(",
+      "\t\tgetScenes().getActiveScene(),",
+      "\t\t${1:x0}, ${2:y0}, ${3:x1}, ${4:y1},",
+      "\t\tCollisionLayers.${5:WORLD});",
+      "if (hit !\u003d null) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "VarCore snippet — collision raycast"
+  },
+  "VarCore APack animator": {
+    "scope": "java",
+    "prefix": "vc-apack",
+    "body": [
+      "Animator animator \u003d ${1:actor}.addComponent(new Animator());",
+      "animator.setAPack(getAssets().loadAPack(\"${2:walk.apack}\"));",
+      "animator.getPlayer().play();",
+      "$0"
+    ],
+    "description": "VarCore snippet — APack animator"
+  },
+  "VarCore assets root": {
+    "scope": "java",
+    "prefix": "vc-assets",
+    "body": [
+      "setAssetsRoot(java.nio.file.Path.of(\"assets\"));",
+      "$0"
+    ],
+    "description": "VarCore snippet — set assets root folder"
+  },
+  "VarCore scene setup": {
+    "scope": "java",
+    "prefix": "vc-scene",
+    "body": [
+      "var scene \u003d getScenes().createScene(\"${1:main}\");",
+      "$0"
+    ],
+    "description": "VarCore snippet — create a scene"
+  }
+}

@@ -1,0 +1,29 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation files('libs/varcore-engine-0.1.0-SNAPSHOT.jar')
+    implementation files('libs/gson-2.11.0.jar')
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+application {
+    mainClass = 'com.varcore.game.Main'
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'com.varcore.game.Main'
+    }
+}

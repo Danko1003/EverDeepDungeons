@@ -1,0 +1,39 @@
+{
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "java.import.gradle.enabled": false,
+  "java.autobuild.enabled": true,
+  "java.completion.enabled": true,
+  "java.completion.importOnPaste": true,
+  "java.completion.guessMethodArguments": false,
+  "java.completion.overwrite": "unknown",
+  "java.codeGeneration.insertionLocation": "afterPackage",
+  "java.saveActions.organizeImports": false,
+  "java.project.outputPath": "bin",
+  "java.project.sourcePaths": [
+    "src/main/java"
+  ],
+  "java.completion.importOrder": [
+    "java",
+    "javax",
+    "com",
+    "org"
+  ],
+  "java.completion.filteredTypes": [
+    "com.sun.*",
+    "sun.*",
+    "jdk.internal.*"
+  ],
+  "java.project.referencedLibraries": [
+    {
+      "path": "libs/varcore-engine-0.1.0-SNAPSHOT.jar",
+      "source": "libs/varcore-engine-0.1.0-SNAPSHOT-sources.jar"
+    },
+    "libs/gson-2.11.0.jar"
+  ],
+  "[java]": {
+    "editor.snippetSuggestions": "none",
+    "editor.tabCompletion": "on",
+    "editor.suggest.matching": "start",
+    "editor.suggest.showWords": false
+  }
+}
