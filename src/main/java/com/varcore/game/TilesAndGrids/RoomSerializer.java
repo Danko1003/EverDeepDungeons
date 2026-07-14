@@ -1,23 +1,28 @@
 package com.varcore.game.TilesAndGrids;
 
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
-public class RoomSerializer 
+public class RoomSerializer
 {
     private static final Gson gson = new GsonBuilder()
             .setPrettyPrinting()
             .create();
 
-    public static void saveRoom(GridManager grid, String roomName, String path)
+    public static Path defaultExportPath(String roomName)
+    {
+        String safe = sanitizeFileName(roomName);
+        return Path.of("assets", "rooms", safe + ".json");
+    }
+
+    public static boolean saveRoom(GridManager grid, String roomName, Path path)
     {
         RoomData data = new RoomData();
-
-        data.name = roomName;
+        data.name = roomName == null || roomName.isBlank() ? "untitled" : roomName.trim();
         data.width = grid.getWidth();
         data.height = grid.getHeight();
         data.tileSize = grid.getTilesize();
@@ -25,21 +30,37 @@ public class RoomSerializer
         data.worldY = grid.getWorldY();
         data.tiles = grid.getGridCopy();
 
-        try (FileWriter writer = new FileWriter(path))
+        try
         {
-            gson.toJson(data, writer);
+            Path parent = path.getParent();
+            if (parent != null)
+            {
+                Files.createDirectories(parent);
+            }
+            Files.writeString(path, gson.toJson(data));
+            return true;
         }
         catch (IOException e)
         {
             System.err.println("Failed to save room: " + e.getMessage());
+            return false;
         }
     }
 
-    public static GridManager loadRoom(String path)
+    public static boolean saveRoom(GridManager grid, String roomName)
     {
-        try (FileReader reader = new FileReader(path))
+        return saveRoom(grid, roomName, defaultExportPath(roomName));
+    }
+
+    public static GridManager loadRoom(Path path)
+    {
+        try
         {
-            RoomData data = gson.fromJson(reader, RoomData.class);
+            RoomData data = gson.fromJson(Files.readString(path), RoomData.class);
+            if (data == null)
+            {
+                return null;
+            }
 
             GridManager grid = new GridManager(
                     data.width,
@@ -49,11 +70,23 @@ public class RoomSerializer
                     data.worldY
             );
 
+            if (data.tiles == null)
+            {
+                return grid;
+            }
+
             for (int y = 0; y < data.height; y++)
             {
                 for (int x = 0; x < data.width; x++)
                 {
-                    grid.setTileId(x, y, data.tiles[y][x].getTileID());
+                    if (data.tiles[y] == null || data.tiles[y][x] == null)
+                    {
+                        continue;
+                    }
+                    CellData cell = data.tiles[y][x];
+                    grid.setTileId(x, y, cell.getTileID());
+                    grid.setOverlayTileId(x, y, cell.getOverlayTileID());
+                    grid.setEntrance(x, y, cell.isEntrance());
                 }
             }
 
@@ -64,5 +97,27 @@ public class RoomSerializer
             System.err.println("Failed to load room: " + e.getMessage());
             return null;
         }
+    }
+
+    /** Convenience overload kept for older call sites. */
+    public static void saveRoom(GridManager grid, String roomName, String path)
+    {
+        saveRoom(grid, roomName, Path.of(path));
+    }
+
+    public static GridManager loadRoom(String path)
+    {
+        return loadRoom(Path.of(path));
+    }
+
+    public static String sanitizeFileName(String name)
+    {
+        if (name == null || name.isBlank())
+        {
+            return "untitled";
+        }
+        String cleaned = name.trim().replaceAll("[\\\\/:*?\"<>|]", "_");
+        cleaned = cleaned.replaceAll("\\s+", "_");
+        return cleaned.isEmpty() ? "untitled" : cleaned;
     }
 }

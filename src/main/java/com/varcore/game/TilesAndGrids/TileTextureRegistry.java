@@ -143,17 +143,23 @@ public class TileTextureRegistry
     private void addSheetPaths()
     {
         sheetPaths.put(0, "assets/Tiles/MissingTexture.png");
-        sheetPaths.put(1, "assets/Tiles/StoneFloor.png");
+        sheetPaths.put(1, "assets/Tiles/TilesSheetOne.png");
+        sheetPaths.put(2, "assets/Tiles/EmptyTile.png");
     }
 
     private void addTextureRegions()
     {
-        textureRegions.put(0, new TextureRegion(0, 0, 0, 32, 32));
-        textureRegions.put(1, new TextureRegion(1, 0, 32, 32, 32)); //Stone1
-        textureRegions.put(2, new TextureRegion(1, 32, 32, 32, 32)); //Stone2
-        textureRegions.put(3, new TextureRegion(1, 0, 0, 32, 32)); //GrassMid
-        textureRegions.put(4, new TextureRegion(1, 0, 32, 32, 32)); //GrassSide
-        textureRegions.put(5, new TextureRegion(1, 0, 64, 32, 32)); //GrassCorner
-        
+        textureRegions.put(0, new TextureRegion(0, 0, 0, 32, 32)); // Missing fallback
+        textureRegions.put(1, new TextureRegion(2, 0, 0, 32, 32)); // EmptyTile
+        textureRegions.put(2, new TextureRegion(1, 96, 0, 32, 32)); // Stone1
+        textureRegions.put(3, new TextureRegion(1, 96, 32, 32, 32)); // Stone2
+        textureRegions.put(4, new TextureRegion(1, 0, 0, 32, 32)); // GrassLight
+        textureRegions.put(5, new TextureRegion(1, 32, 0, 32, 32)); // GrassMedium
+        textureRegions.put(6, new TextureRegion(1, 32, 32, 32, 32)); // GrassDark
+        textureRegions.put(7, new TextureRegion(1, 0, 32, 32, 32)); // GrassDarkest
+        textureRegions.put(8, new TextureRegion(1, 64, 96, 32, 32)); // StoneWallFaceLower (brick)
+        textureRegions.put(9, new TextureRegion(1, 96, 96, 32, 32)); // StoneWallFaceOverLay (brick)
+        textureRegions.put(10, new TextureRegion(1, 96, 64, 32, 32)); // StoneWallTop
+
     }
 }
