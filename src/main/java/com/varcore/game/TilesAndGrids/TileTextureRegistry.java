@@ -160,6 +160,9 @@ public class TileTextureRegistry
         textureRegions.put(8, new TextureRegion(1, 64, 96, 32, 32)); // StoneWallFaceLower (brick)
         textureRegions.put(9, new TextureRegion(1, 96, 96, 32, 32)); // StoneWallFaceOverLay (brick)
         textureRegions.put(10, new TextureRegion(1, 96, 64, 32, 32)); // StoneWallTop
-
+        textureRegions.put(11, new TextureRegion(1, 0, 64, 32, 32)); // DirtPathOne
+        textureRegions.put(12, new TextureRegion(1, 32, 64, 32, 32)); // DirtPathThree
+        textureRegions.put(13, new TextureRegion(1, 64, 0, 32, 32)); // DirtNormal
+        textureRegions.put(14, new TextureRegion(1, 64, 32, 32, 32)); // DirtBurnt
     }
 }

@@ -95,6 +95,10 @@ public class TileRegistry
         registerTile(new Tile(5, Tile.TileType.FLOOR, false, 5, "Grass Medium"));
         registerTile(new Tile(6, Tile.TileType.FLOOR, false, 6, "Grass Dark"));
         registerTile(new Tile(7, Tile.TileType.FLOOR, false, 7, "Grass Darkest"));
+        registerTile(new Tile(11, Tile.TileType.FLOOR, false, 11, "Dirt Path One"));
+        registerTile(new Tile(13, Tile.TileType.FLOOR, false, 12, "Dirt Path Three"));
+        registerTile(new Tile(14, Tile.TileType.FLOOR, false, 13, "Dirt Normal"));
+        registerTile(new Tile(15, Tile.TileType.FLOOR, false, 14, "Dirt Burnt"));
 
         // Wall piece tiles — placement/erase rules: StructureRegistry
         registerTile(new Tile(WALL_FACE_ID, Tile.TileType.WALL, true, 8, "Stone Wall"));
