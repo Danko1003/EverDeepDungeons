@@ -2,10 +2,11 @@ package com.varcore.game;
 
 public class CamGame 
 {
-    private static final float MIN_ZOOM = 0.25f;
+    /** Far zoom floor. Rendering switches to a cheap mode before this point. */
+    private static final float MIN_ZOOM = 0.18f;
     private static final float MAX_ZOOM = 4.0f;
     /** Zoom change per mouse-wheel tick. */
-    private static final float ZOOM_PER_TICK = 0.12f;
+    private static final float ZOOM_PER_TICK = 0.10f;
 
     private float camX;
     private float camY;
@@ -23,6 +24,14 @@ public class CamGame
     public void setViewportSize(int width, int height) {
         this.viewportWidth = width;
         this.viewportHeight = height;
+    }
+
+    public int getViewportWidth() {
+        return viewportWidth;
+    }
+
+    public int getViewportHeight() {
+        return viewportHeight;
     }
 
     public float getCamX() {

@@ -9,12 +9,15 @@ import com.varcore.engine.input.InputManager;
 import com.varcore.engine.render.Renderer;
 import com.varcore.game.CamGame;
 import com.varcore.game.Inputs;
+import com.varcore.game.TilesAndGrids.CellVisualCache;
 import com.varcore.game.TilesAndGrids.GridManager;
 import com.varcore.game.TilesAndGrids.GridRenderer;
 import com.varcore.game.TilesAndGrids.RoomSerializer;
 import com.varcore.game.TilesAndGrids.StructureRegistry;
+import com.varcore.game.TilesAndGrids.TileMaterialRegistry;
 import com.varcore.game.TilesAndGrids.TileRegistry;
 import com.varcore.game.TilesAndGrids.TileTextureRegistry;
+import com.varcore.game.TilesAndGrids.TransitionResolver;
 
 /**
  * In-game room editor with tile palette, room settings (name / size / export),
@@ -55,13 +58,19 @@ public class RoomMaker
     public RoomMaker(TileRegistry tileRegistry, TileTextureRegistry textureRegistry, int screenW, int screenH)
     {
         this.structures = new StructureRegistry();
-        this.gridRenderer = new GridRenderer(tileRegistry, textureRegistry, structures);
-        this.camera = new CamGame(0, 0, 1);
-        this.inputs = new Inputs();
+        TileMaterialRegistry materials = new TileMaterialRegistry(textureRegistry);
+        TransitionResolver resolver = new TransitionResolver(materials, TILE_SIZE);
 
         int mapW = computeMapWidth(screenW);
         int mapH = computeMapHeight(screenH);
+        CellVisualCache visualCache = new CellVisualCache(resolver, mapW, mapH);
+        this.gridRenderer = new GridRenderer(
+                tileRegistry, textureRegistry, structures, materials, visualCache);
+        this.camera = new CamGame(0, 0, 1);
+        this.inputs = new Inputs();
+
         this.grid = new GridManager(mapW, mapH, TILE_SIZE, 0, 0, TileRegistry.EMPTY_TILE_ID);
+        this.grid.setVisualCache(visualCache);
 
         settings = new RoomSettingsPanel(PANEL_MARGIN, PANEL_MARGIN, mapW, mapH);
         settings.setOnExport(this::exportRoom);
@@ -90,16 +99,21 @@ public class RoomMaker
     {
         camera.setViewportSize(screenW, screenH);
 
-        settings.setBounds(PANEL_MARGIN, PANEL_MARGIN);
+        float settingsW = clamp(screenW * 0.20f, 180f, 280f);
+        float paletteW = clamp(screenW * 0.21f, 190f, 310f);
+        float margin = clamp(Math.min(screenW, screenH) * 0.012f, 6f, 14f);
+
+        settings.setBounds(margin, margin, settingsW);
         settings.syncDimensions(grid.getWidth(), grid.getHeight());
         settings.updatePanel(input, dt);
 
-        float panelH = Math.max(280f, screenH - 88f);
-        float panelX = screenW - PANEL_W - PANEL_MARGIN;
-        palette.setBounds(panelX, PANEL_MARGIN, PANEL_W, panelH);
+        float clearH = clamp(screenH * 0.052f, 30f, 42f);
+        float panelH = Math.max(200f, screenH - margin * 3f - clearH);
+        float panelX = screenW - paletteW - margin;
+        palette.setBounds(panelX, margin, paletteW, panelH);
 
-        float clearY = PANEL_MARGIN + panelH + 8f;
-        clearButton.placeTopRight(screenW, PANEL_MARGIN, clearY, PANEL_W, 36f);
+        float clearY = margin + panelH + margin;
+        clearButton.placeTopRight(screenW, margin, clearY, paletteW, clearH);
 
         // Name field + palette / clear handle their own input; avoid double layout damage
         // by only updating palette/clear through UIRenderer (settings already updated).
@@ -130,6 +144,11 @@ public class RoomMaker
                 camera.zoomByWheel(input.getMouseWheelDelta());
             }
         }
+    }
+
+    private static float clamp(float value, float min, float max)
+    {
+        return Math.max(min, Math.min(max, value));
     }
 
     public void render(Renderer renderer)

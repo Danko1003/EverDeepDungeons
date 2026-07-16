@@ -51,11 +51,16 @@ public class RoomSettingsPanel extends UIElement
 
     public void setBounds(float x, float y)
     {
+        setBounds(x, y, PANEL_W);
+    }
+
+    public void setBounds(float x, float y, float width)
+    {
         this.x = x;
         this.y = y;
-        this.width = PANEL_W;
+        this.width = Math.max(180f, width);
         this.height = PANEL_H;
-        nameField.setBounds(x + MARGIN, y + 48, PANEL_W - MARGIN * 2, 28f);
+        nameField.setBounds(x + MARGIN, y + 48, this.width - MARGIN * 2, 28f);
     }
 
     public UITextField getNameField()

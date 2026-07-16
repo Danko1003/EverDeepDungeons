@@ -9,6 +9,7 @@ public class GridManager
     private int worldX;
     private int worldY;
     private final int defaultTileId;
+    private CellVisualCache visualCache;
 
     public GridManager(int width, int height, int tilesize, int worldX, int worldY)
     {
@@ -24,6 +25,20 @@ public class GridManager
         this.width = Math.max(1, width);
         this.height = Math.max(1, height);
         this.grid = createCells(this.width, this.height, defaultTileId);
+    }
+
+    public void setVisualCache(CellVisualCache visualCache)
+    {
+        this.visualCache = visualCache;
+        if (visualCache != null)
+        {
+            visualCache.resize(width, height);
+        }
+    }
+
+    public CellVisualCache getVisualCache()
+    {
+        return visualCache;
     }
 
     public void resize(int newWidth, int newHeight)
@@ -49,6 +64,54 @@ public class GridManager
         grid = next;
         width = newWidth;
         height = newHeight;
+        if (visualCache != null)
+        {
+            // Keep already-built projections for the overlapping region.
+            visualCache.resize(width, height, true);
+        }
+    }
+
+    /**
+     * Slides this fixed-size grid while preserving cells that still overlap the
+     * new world window. Positive shifts move existing cells right/down.
+     */
+    public void shiftWindow(int shiftX, int shiftY, int newWorldX, int newWorldY)
+    {
+        if (shiftX == 0 && shiftY == 0)
+        {
+            worldX = newWorldX;
+            worldY = newWorldY;
+            return;
+        }
+
+        CellData[][] next = createCells(width, height, defaultTileId);
+        if (Math.abs(shiftX) < width && Math.abs(shiftY) < height)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                int ny = y + shiftY;
+                if (ny < 0 || ny >= height)
+                {
+                    continue;
+                }
+                for (int x = 0; x < width; x++)
+                {
+                    int nx = x + shiftX;
+                    if (nx >= 0 && nx < width)
+                    {
+                        next[ny][nx] = grid[y][x];
+                    }
+                }
+            }
+        }
+
+        grid = next;
+        worldX = newWorldX;
+        worldY = newWorldY;
+        if (visualCache != null)
+        {
+            visualCache.shiftBy(shiftX, shiftY);
+        }
     }
 
     /**
@@ -77,6 +140,10 @@ public class GridManager
         grid = next;
         height = newHeight;
         worldY -= rows * tilesize;
+        if (visualCache != null)
+        {
+            visualCache.resize(width, height, true);
+        }
         return rows;
     }
 
@@ -88,6 +155,10 @@ public class GridManager
             {
                 grid[y][x].setTileID(tileId);
             }
+        }
+        if (visualCache != null)
+        {
+            visualCache.markAllDirty();
         }
     }
 
@@ -134,6 +205,16 @@ public class GridManager
     }
 
     public void setTileId(int gridX, int gridY, int newID)
+    {
+        grid[gridY][gridX].setTileID(newID);
+        if (visualCache != null)
+        {
+            visualCache.markDirty3x3(gridX, gridY);
+        }
+    }
+
+    /** Sets floor tile without marking the visual cache dirty (bulk world stamps). */
+    public void setTileIdSilent(int gridX, int gridY, int newID)
     {
         grid[gridY][gridX].setTileID(newID);
     }
