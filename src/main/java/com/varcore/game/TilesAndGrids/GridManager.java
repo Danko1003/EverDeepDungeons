@@ -84,28 +84,35 @@ public class GridManager
             return;
         }
 
-        CellData[][] next = createCells(width, height, defaultTileId);
-        if (Math.abs(shiftX) < width && Math.abs(shiftY) < height)
+        if (Math.abs(shiftX) >= width || Math.abs(shiftY) >= height)
         {
-            for (int y = 0; y < height; y++)
+            grid = createCells(width, height, defaultTileId);
+        }
+        else
+        {
+            int yStart = shiftY > 0 ? height - 1 : 0;
+            int yEnd = shiftY > 0 ? -1 : height;
+            int yStep = shiftY > 0 ? -1 : 1;
+            int xStart = shiftX > 0 ? width - 1 : 0;
+            int xEnd = shiftX > 0 ? -1 : width;
+            int xStep = shiftX > 0 ? -1 : 1;
+            for (int y = yStart; y != yEnd; y += yStep)
             {
-                int ny = y + shiftY;
-                if (ny < 0 || ny >= height)
+                for (int x = xStart; x != xEnd; x += xStep)
                 {
-                    continue;
-                }
-                for (int x = 0; x < width; x++)
-                {
-                    int nx = x + shiftX;
-                    if (nx >= 0 && nx < width)
+                    int sourceX = x - shiftX;
+                    int sourceY = y - shiftY;
+                    if (sourceX >= 0 && sourceY >= 0 && sourceX < width && sourceY < height)
                     {
-                        next[ny][nx] = grid[y][x];
+                        grid[y][x] = grid[sourceY][sourceX];
+                    }
+                    else
+                    {
+                        grid[y][x] = new CellData(defaultTileId, 0);
                     }
                 }
             }
         }
-
-        grid = next;
         worldX = newWorldX;
         worldY = newWorldY;
         if (visualCache != null)

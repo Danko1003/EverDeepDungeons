@@ -32,9 +32,9 @@ public final class OpenWorldMode
     /** Recenter the render window when the camera leaves this inner margin. */
     private static final int RECENTER_MARGIN = 14;
     /** Projection prewarm cells per update (keeps render/input smooth). */
-    private static final int PREWARM_BUILDS_PER_FRAME = 96;
+    private static final int PREWARM_BUILDS_PER_FRAME = 24;
     private static final int PREFETCH_CHUNKS_PER_FRAME = 2;
-    private static final float PROJECTION_MIN_ZOOM = 0.40f;
+    private static final float PROJECTION_MIN_ZOOM = 0.60f;
 
     private final StructureRegistry structures;
     private final GridRenderer gridRenderer;
@@ -51,6 +51,7 @@ public final class OpenWorldMode
     private int windowOriginTY;
     private boolean needsFullSync = true;
     private int prefetchCursor;
+    private float animTime;
 
     public OpenWorldMode(TileRegistry tiles, TileTextureRegistry textures)
     {
@@ -92,6 +93,8 @@ public final class OpenWorldMode
     public void update(InputManager input, float dt, int screenW, int screenH)
     {
         camera.setViewportSize(screenW, screenH);
+        animTime += dt;
+        gridRenderer.setAnimTime(animTime);
         inputs.camInputs(input, camera, dt);
 
         if (input.isKeyPressed(KeyEvent.VK_R))
@@ -140,17 +143,22 @@ public final class OpenWorldMode
 
     private void ensureWindowSize(int screenW, int screenH)
     {
-        // Size the window for the farthest zoom so changing zoom never resizes
-        // (and never wipes / rebuilds) already-rendered expansions.
-        float farZoom = 0.18f;
+        // Allocate for the current view plus zoom headroom, not the maximum
+        // far-zoom world on the first frame.
+        float sizingZoom = Math.max(0.18f, camera.getZoom() * 0.78f);
         int pad = VIEW_PAD_TILES;
-        int needW = (int) Math.ceil(screenW / (TILE_SIZE * farZoom)) + pad * 2;
-        int needH = (int) Math.ceil(screenH / (TILE_SIZE * farZoom)) + pad * 2;
+        int needW = (int) Math.ceil(screenW / (TILE_SIZE * sizingZoom)) + pad * 2;
+        int needH = (int) Math.ceil(screenH / (TILE_SIZE * sizingZoom)) + pad * 2;
         // Keep the far-zoom window large enough to cover fullscreen displays.
         // At low zoom we draw cheap average-color rects, so a bigger tile window
         // is acceptable and prevents black margins past the generated area.
         needW = Math.max(48, Math.min(420, needW));
         needH = Math.max(36, Math.min(260, needH));
+
+        // Grow extreme zoom changes over a few frames and never shrink during
+        // play, avoiding both a single allocation spike and resize thrashing.
+        needW = Math.max(grid.getWidth(), Math.min(needW, grid.getWidth() + 56));
+        needH = Math.max(grid.getHeight(), Math.min(needH, grid.getHeight() + 40));
 
         if (needW == grid.getWidth() && needH == grid.getHeight())
         {

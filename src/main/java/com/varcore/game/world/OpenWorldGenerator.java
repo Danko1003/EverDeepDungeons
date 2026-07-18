@@ -24,6 +24,10 @@ public final class OpenWorldGenerator
 
     /** World-tile spacing for ruin placement candidates. */
     private static final int RUIN_REGION = 48;
+    /** World-tile spacing for wandering dirt-path segments. */
+    private static final int PATH_REGION = 36;
+    /** World-tile spacing for scorched biome anchors. */
+    private static final int BURNT_REGION = 64;
 
     private int seed;
 
@@ -56,6 +60,7 @@ public final class OpenWorldGenerator
             }
         }
 
+        stampDirtPathsOverlapping(chunk);
         stampRuinsOverlapping(chunk);
         return chunk;
     }
@@ -67,6 +72,13 @@ public final class OpenWorldGenerator
         float detail = fbm(wx * 0.045f, wy * 0.045f, seed ^ 0xD37A11);
         float shade = fbm(wx * 0.028f, wy * 0.028f, seed ^ 0x67A55);
         float stoneN = fbm(wx * 0.02f, wy * 0.02f, seed ^ 0x5704E);
+        float scorched = scorchedField(wx, wy);
+
+        // Scorched / burnt biomes with grass islands (so burn borders are visible)
+        if (scorched > 0.28f)
+        {
+            return scorchedTile(wx, wy, scorched, shade, detail);
+        }
 
         // Stone-heavy pockets — mix both stone tiles
         if (stoneN > 0.58f && biome > 0.05f)
@@ -75,7 +87,7 @@ public final class OpenWorldGenerator
             return mix > 0.1f ? STONE_A : STONE_B;
         }
 
-        // Dirt core — Dirt Three is the darkest / strongest dirt
+        // Dirt core
         if (biome < -0.22f)
         {
             float strength = (-biome - 0.22f) / 0.78f + detail * 0.25f;
@@ -87,17 +99,13 @@ public final class OpenWorldGenerator
             {
                 return DIRT_TWO;
             }
-            if (strength > 0.12f)
-            {
-                return DIRT_ONE;
-            }
-            return detail > 0.4f ? DIRT_BURNT : DIRT_ONE;
+            return DIRT_ONE;
         }
 
         // Soft fringe: darkest grass + Dirt Three meet along the dirt boundary
         if (biome < -0.05f)
         {
-            float edge = (-biome - 0.05f) / 0.17f; // 0..1 toward dirt
+            float edge = (-biome - 0.05f) / 0.17f;
             float speck = fbm(wx * 0.11f, wy * 0.11f, seed ^ 0xD17F);
             if (edge + speck * 0.35f > 0.55f)
             {
@@ -106,7 +114,85 @@ public final class OpenWorldGenerator
             return G_DEEP;
         }
 
-        // Grass field with shade gradient (light → medium → dark → darkest)
+        return grassFromShade(shade, biome, detail);
+    }
+
+    /**
+     * Continuous scorched intensity in roughly [0, 1+]. Peaks near occasional
+     * biome anchors so burnt fields appear as coherent patches, not noise.
+     */
+    private float scorchedField(int wx, int wy)
+    {
+        float base = fbm(wx * 0.009f, wy * 0.009f, seed ^ 0x5C04);
+        // Remap typical [-1,1] fbm into a rarer high band
+        float field = (base + 0.15f) * 0.72f;
+
+        int rx = floorDiv(wx, BURNT_REGION);
+        int ry = floorDiv(wy, BURNT_REGION);
+        // Check this region + neighbors so patches blend across region borders
+        float boost = 0f;
+        for (int oy = -1; oy <= 1; oy++)
+        {
+            for (int ox = -1; ox <= 1; ox++)
+            {
+                int arx = rx + ox;
+                int ary = ry + oy;
+                if (!shouldSpawnBurntBiome(arx, ary))
+                {
+                    continue;
+                }
+                int h = hash(arx, ary, seed, 0xB04E);
+                int cx = arx * BURNT_REGION + 12 + Math.floorMod(h >>> 4, BURNT_REGION - 24);
+                int cy = ary * BURNT_REGION + 12 + Math.floorMod(h >>> 10, BURNT_REGION - 24);
+                float radius = 14f + Math.floorMod(h >>> 16, 18); // 14–31 tiles
+                float dx = wx - cx;
+                float dy = wy - cy;
+                float dist = (float) Math.sqrt(dx * dx + dy * dy);
+                float falloff = 1f - dist / radius;
+                if (falloff > 0f)
+                {
+                    // Soft dome — keeps interiors solid burnt
+                    boost = Math.max(boost, falloff * falloff * (0.85f + (h & 7) * 0.02f));
+                }
+            }
+        }
+        return field + boost;
+    }
+
+    private boolean shouldSpawnBurntBiome(int regionX, int regionY)
+    {
+        int h = hash(regionX, regionY, seed, 0xB04E);
+        return Math.floorMod(h, 100) < 22;
+    }
+
+    private int scorchedTile(int wx, int wy, float scorched, float shade, float detail)
+    {
+        // Grass islands / chunks inside the burn — large enough to show flaming borders
+        float island = fbm(wx * 0.055f, wy * 0.055f, seed ^ 0x15A4D);
+        float islandDetail = fbm(wx * 0.12f, wy * 0.12f, seed ^ 0x6485);
+        float islandStrength = island * 0.75f + islandDetail * 0.25f;
+
+        // Prefer islands away from the absolute hottest core so borders stay readable
+        if (scorched < 0.92f && islandStrength > 0.38f)
+        {
+            // Soft island edge: thin burnt fringe between grass and deep scorched
+            if (islandStrength < 0.48f && scorched > 0.4f)
+            {
+                return DIRT_BURNT;
+            }
+            return grassFromShade(shade, islandStrength, detail);
+        }
+
+        // Outer scorched fringe mixes ash dirt with burnt
+        if (scorched < 0.38f)
+        {
+            return detail > 0.15f ? DIRT_BURNT : DIRT_ONE;
+        }
+        return DIRT_BURNT;
+    }
+
+    private static int grassFromShade(float shade, float biome, float detail)
+    {
         float g = shade * 0.7f + biome * 0.25f + detail * 0.12f;
         if (g > 0.42f)
         {
@@ -121,6 +207,129 @@ public final class OpenWorldGenerator
             return G_MED;
         }
         return G_LIGHT;
+    }
+
+    /**
+     * Wandering Dirt Path One roads of varying width. Region-hashed so segments
+     * stitch across chunk borders.
+     */
+    private void stampDirtPathsOverlapping(WorldChunk chunk)
+    {
+        int ox = chunk.worldOriginX();
+        int oy = chunk.worldOriginY();
+        int margin = 48;
+        int x0 = ox - margin;
+        int y0 = oy - margin;
+        int x1 = ox + CHUNK_SIZE + margin;
+        int y1 = oy + CHUNK_SIZE + margin;
+
+        int rx0 = floorDiv(x0, PATH_REGION);
+        int ry0 = floorDiv(y0, PATH_REGION);
+        int rx1 = floorDiv(x1, PATH_REGION);
+        int ry1 = floorDiv(y1, PATH_REGION);
+
+        for (int ry = ry0; ry <= ry1; ry++)
+        {
+            for (int rx = rx0; rx <= rx1; rx++)
+            {
+                if (!shouldSpawnDirtPath(rx, ry))
+                {
+                    continue;
+                }
+                stampDirtPath(chunk, rx, ry);
+            }
+        }
+    }
+
+    private boolean shouldSpawnDirtPath(int regionX, int regionY)
+    {
+        int h = hash(regionX, regionY, seed, 0x0A71);
+        return Math.floorMod(h, 100) < 38;
+    }
+
+    private void stampDirtPath(WorldChunk chunk, int regionX, int regionY)
+    {
+        int h = hash(regionX, regionY, seed, 0x0A71);
+        int regionOx = regionX * PATH_REGION;
+        int regionOy = regionY * PATH_REGION;
+
+        int x = regionOx + 4 + Math.floorMod(h >>> 2, PATH_REGION - 8);
+        int y = regionOy + 4 + Math.floorMod(h >>> 8, PATH_REGION - 8);
+        int length = 16 + Math.floorMod(h >>> 14, 28); // 16–43
+        int width = 1 + Math.floorMod(h >>> 20, 3);    // 1–3 tiles
+        int dir = Math.floorMod(h >>> 24, 4);          // N E S W
+        int turnChance = 3 + Math.floorMod(h >>> 5, 4); // turn every ~3–6 steps
+
+        for (int step = 0; step < length; step++)
+        {
+            paintDirtOneBrush(chunk, x, y, width);
+
+            // Occasional meander
+            if (step > 0 && step % turnChance == 0)
+            {
+                int turn = Math.floorMod(hash(x, y, seed, step), 3) - 1; // -1,0,1
+                dir = Math.floorMod(dir + turn, 4);
+            }
+            // Slight lateral wobble on longer stretches
+            if ((hash(x, y, seed, 0xA0B1) & 7) == 0)
+            {
+                int side = Math.floorMod(dir + 1, 4);
+                int[] sd = dirDelta(side);
+                paintDirtOneBrush(chunk, x + sd[0], y + sd[1], Math.max(1, width - 1));
+            }
+
+            int[] d = dirDelta(dir);
+            x += d[0];
+            y += d[1];
+        }
+    }
+
+    private static int[] dirDelta(int dir)
+    {
+        return switch (dir)
+        {
+            case 0 -> new int[] {0, -1};
+            case 1 -> new int[] {1, 0};
+            case 2 -> new int[] {0, 1};
+            default -> new int[] {-1, 0};
+        };
+    }
+
+    private void paintDirtOneBrush(WorldChunk chunk, int wx, int wy, int width)
+    {
+        int half = width / 2;
+        for (int dy = -half; dy <= half; dy++)
+        {
+            for (int dx = -half; dx <= half; dx++)
+            {
+                // Round-ish brush for width 3 so paths aren't perfect squares
+                if (width > 1 && dx * dx + dy * dy > half * half + 1)
+                {
+                    continue;
+                }
+                paintDirtOne(chunk, wx + dx, wy + dy);
+            }
+        }
+    }
+
+    private void paintDirtOne(WorldChunk chunk, int wx, int wy)
+    {
+        int lx = wx - chunk.worldOriginX();
+        int ly = wy - chunk.worldOriginY();
+        if (!inChunk(lx, ly))
+        {
+            return;
+        }
+        if (chunk.getOverlay(lx, ly) != 0)
+        {
+            return;
+        }
+        int existing = chunk.getFloor(lx, ly);
+        if (existing == STONE_A || existing == STONE_B)
+        {
+            return;
+        }
+        chunk.setFloor(lx, ly, DIRT_ONE);
     }
 
     /**

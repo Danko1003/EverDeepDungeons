@@ -120,24 +120,30 @@ public final class CellVisualCache
             return;
         }
 
-        BufferedImage[][] nextImages = new BufferedImage[height][width];
-        boolean[][] nextDirty = new boolean[height][width];
-        for (int y = 0; y < height; y++)
+        int yStart = shiftY > 0 ? height - 1 : 0;
+        int yEnd = shiftY > 0 ? -1 : height;
+        int yStep = shiftY > 0 ? -1 : 1;
+        int xStart = shiftX > 0 ? width - 1 : 0;
+        int xEnd = shiftX > 0 ? -1 : width;
+        int xStep = shiftX > 0 ? -1 : 1;
+        for (int y = yStart; y != yEnd; y += yStep)
         {
-            for (int x = 0; x < width; x++)
+            for (int x = xStart; x != xEnd; x += xStep)
             {
-                nextDirty[y][x] = true;
-                int nx = x + shiftX;
-                int ny = y + shiftY;
-                if (nx >= 0 && ny >= 0 && nx < width && ny < height)
+                int sourceX = x - shiftX;
+                int sourceY = y - shiftY;
+                if (sourceX >= 0 && sourceY >= 0 && sourceX < width && sourceY < height)
                 {
-                    nextImages[ny][nx] = images[y][x];
-                    nextDirty[ny][nx] = dirty[y][x];
+                    images[y][x] = images[sourceY][sourceX];
+                    dirty[y][x] = dirty[sourceY][sourceX];
+                }
+                else
+                {
+                    images[y][x] = null;
+                    dirty[y][x] = true;
                 }
             }
         }
-        images = nextImages;
-        dirty = nextDirty;
     }
 
     /**

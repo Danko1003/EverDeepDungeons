@@ -1,16 +1,18 @@
 package com.varcore.game.TilesAndGrids;
 
 import java.awt.image.BufferedImage;
+import java.util.EnumSet;
 
 /**
  * Separates what a material looks like from where it may expand.
  * Logical floor tile IDs map to materials via {@link TileMaterialRegistry}.
  *
- * <p>Expansion is decided only by:
+ * <p>Expansion is decided by:
  * <ul>
  *   <li>{@code canExpand} — may this material fringe onto neighbors?</li>
  *   <li>{@code acceptsExpansion} — may neighbors fringe onto this cell?</li>
- *   <li>{@code dominanceLayer} — higher layer wins over lower</li>
+ *   <li>{@code dominanceLayer} — higher layer wins over lower; equal layers
+ *       peer-blend one-sided (lower id onto higher) so seams aren't double-fringed</li>
  * </ul>
  */
 public final class TileMaterial
@@ -22,6 +24,7 @@ public final class TileMaterial
     private final boolean acceptsExpansion;
     private final String expansionProfileId;
     private final MaterialFamily family;
+    private final EnumSet<MaterialTrait> traits;
 
     public TileMaterial(
             int id,
@@ -30,7 +33,8 @@ public final class TileMaterial
             boolean canExpand,
             boolean acceptsExpansion,
             String expansionProfileId,
-            MaterialFamily family)
+            MaterialFamily family,
+            MaterialTrait... traits)
     {
         this.id = id;
         this.texture = texture;
@@ -39,6 +43,9 @@ public final class TileMaterial
         this.acceptsExpansion = acceptsExpansion;
         this.expansionProfileId = expansionProfileId;
         this.family = family;
+        this.traits = traits == null || traits.length == 0
+                ? EnumSet.noneOf(MaterialTrait.class)
+                : EnumSet.of(traits[0], traits);
     }
 
     public int getId()
@@ -76,9 +83,15 @@ public final class TileMaterial
         return family;
     }
 
+    public boolean hasTrait(MaterialTrait trait)
+    {
+        return traits.contains(trait);
+    }
+
     /**
      * Whether {@code source} may fringe onto a cell of {@code target}.
-     * No family exceptions — only expand flags and dominance layer.
+     * Higher layer expands onto lower. Same-layer peers blend on one side of the
+     * seam only (lower id → higher id) so the edge isn't double-fringed.
      */
     public static boolean canExpandOnto(TileMaterial source, TileMaterial target)
     {
@@ -90,6 +103,15 @@ public final class TileMaterial
         {
             return false;
         }
-        return source.dominanceLayer > target.dominanceLayer;
+        if (source.dominanceLayer > target.dominanceLayer)
+        {
+            return true;
+        }
+        // Peer blend: same layer, both expanders, different materials.
+        // One-sided (source.id < target.id) so only one cell of the pair
+        // receives the fringe — at the collision, not into both interiors.
+        return source.dominanceLayer == target.dominanceLayer
+                && target.canExpand
+                && source.id < target.id;
     }
 }

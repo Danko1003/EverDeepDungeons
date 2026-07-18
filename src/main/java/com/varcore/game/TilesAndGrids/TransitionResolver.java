@@ -36,7 +36,7 @@ public final class TransitionResolver
         MaterialRegion base = new MaterialRegion(baseMat, PixelMask.full(tileSize));
 
         // Exclusive masks after collaborative resolve (for inspection / debugging)
-        List<MaterialRegion> overlays = bakeExclusiveOverlays(contributions);
+        List<MaterialRegion> overlays = bakeExclusiveOverlays(contributions, cellX, cellY);
         return new CellVisual(base, overlays);
     }
 
@@ -63,8 +63,12 @@ public final class TransitionResolver
         List<Contribution> contributions = collectContributions(grid, cellX, cellY, baseMat);
         int worldX = grid.getWorldX() + cellX * tileSize;
         int worldY = grid.getWorldY() + cellY * tileSize;
+        boolean revealCore = isHeavilySurrounded(contributions);
 
         BufferedImage out = new BufferedImage(tileSize, tileSize, BufferedImage.TYPE_INT_ARGB);
+        // Flat arrays avoid 66 small row-array allocations per rebuilt cell.
+        boolean[] burnableOverlay = new boolean[tileSize * tileSize];
+        boolean[] baseExposed = new boolean[tileSize * tileSize];
         paintMaterial(out, baseMat, PixelMask.full(tileSize), worldX, worldY);
 
         // Per-pixel collaborative ownership
@@ -72,19 +76,98 @@ public final class TransitionResolver
         {
             for (int px = 0; px < tileSize; px++)
             {
-                Contribution winner = pickWinner(contributions, px, py);
+                Contribution winner = pickWinner(contributions, px, py, cellX, cellY, revealCore);
                 if (winner == null)
                 {
+                    baseExposed[py * tileSize + px] = true;
                     continue;
                 }
                 int rgb = sample(winner.material.getTexture(), worldX + px, worldY + py);
+                if (winner.material.hasTrait(MaterialTrait.BURNABLE)
+                        && baseMat.hasTrait(MaterialTrait.BURNT))
+                {
+                    // Keep grass fringe colors normal — only the 1px tip against
+                    // remaining burnt gets flaming (below). Tinting the whole fringe
+                    // makes a murky rectangular border around the burnt blob.
+                    burnableOverlay[py * tileSize + px] = true;
+                }
                 if ((rgb >>> 24) != 0)
                 {
                     out.setRGB(px, py, rgb);
                 }
             }
         }
+        paintFlamingBorderTips(out, burnableOverlay, baseExposed, worldX, worldY);
         return out;
+    }
+
+    /**
+     * Thin flame rim where burnable fringe meets remaining burnt base only.
+     * No inward smear — that recreated the weird colored tile border.
+     */
+    private static void paintFlamingBorderTips(
+            BufferedImage out,
+            boolean[] burnableOverlay,
+            boolean[] baseExposed,
+            int worldX,
+            int worldY)
+    {
+        int width = out.getWidth();
+        int height = out.getHeight();
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int idx = y * width + x;
+                if (!burnableOverlay[idx] || !touchesExposedBase(baseExposed, width, height, x, y))
+                {
+                    continue;
+                }
+                int noise = ExpansionMaskGenerator.hash(worldX + x, worldY + y, 0xF1AE, 19);
+                int existing = out.getRGB(x, y);
+                int heat = noise & 7;
+                int fire = switch (heat)
+                {
+                    case 0 -> 0xFFFFE08A;
+                    case 1, 2 -> 0xFFFFC04A;
+                    case 3, 4 -> 0xFFF07A24;
+                    default -> 0xFFE24A12;
+                };
+                float amount = heat <= 1 ? 0.82f : heat <= 4 ? 0.72f : 0.62f;
+                out.setRGB(x, y, blendRgb(existing, fire, amount));
+            }
+        }
+    }
+
+    private static boolean touchesExposedBase(
+            boolean[] baseExposed, int width, int height, int x, int y)
+    {
+        if (x > 0 && baseExposed[y * width + x - 1])
+        {
+            return true;
+        }
+        if (x < width - 1 && baseExposed[y * width + x + 1])
+        {
+            return true;
+        }
+        if (y > 0 && baseExposed[(y - 1) * width + x])
+        {
+            return true;
+        }
+        if (y < height - 1 && baseExposed[(y + 1) * width + x])
+        {
+            return true;
+        }
+        return false;
+    }
+
+    private static int blendRgb(int from, int to, float amount)
+    {
+        int a = (from >>> 24) & 0xFF;
+        int r = Math.round(((from >>> 16) & 0xFF) * (1f - amount) + ((to >>> 16) & 0xFF) * amount);
+        int g = Math.round(((from >>> 8) & 0xFF) * (1f - amount) + ((to >>> 8) & 0xFF) * amount);
+        int b = Math.round((from & 0xFF) * (1f - amount) + (to & 0xFF) * amount);
+        return (a << 24) | (r << 16) | (g << 8) | b;
     }
 
     private List<Contribution> collectContributions(
@@ -131,45 +214,38 @@ public final class TransitionResolver
 
         for (Corner corner : Corner.values())
         {
-            TileMaterial cornerMat = null;
-            Direction sourceDir = corner.diagonal;
-
             TileMaterial vMat = cardinalSource.get(corner.vertical);
             TileMaterial hMat = cardinalSource.get(corner.horizontal);
             if (vMat != null && hMat != null)
             {
-                cornerMat = vMat.getId() == hMat.getId()
-                        ? vMat
-                        : (vMat.getDominanceLayer() >= hMat.getDominanceLayer() ? vMat : hMat);
-                sourceDir = corner.diagonal;
-
-                // Concave L from a diagonal stair: fill a half-tile bevel so the
-                // path reads as a straighter diagonal instead of tile steps.
-                int variant = Math.floorMod(
-                        ExpansionMaskGenerator.hash(
-                                cellX, cellY, cornerMat.getId(), corner.ordinal() + 90),
-                        4);
-                PixelMask bevel = ExpansionMaskGenerator.generateStairBevel(corner, variant);
-                contributions.add(new Contribution(cornerMat, bevel, sourceDir, true));
+                // Same-material L only: half-tile bevels straighten stairs.
+                // Mixed materials (dirt+grass onto stone, etc.) already have both
+                // edge masks — a bevel here makes them nibble each other apart.
+                if (vMat.getId() == hMat.getId())
+                {
+                    int variant = Math.floorMod(
+                            ExpansionMaskGenerator.hash(
+                                    cellX, cellY, vMat.getId(), corner.ordinal() + 90),
+                            4);
+                    PixelMask bevel = ExpansionMaskGenerator.generateStairBevel(
+                            corner, variant);
+                    contributions.add(new Contribution(
+                            vMat, bevel, corner.diagonal, true));
+                }
                 continue;
             }
 
             TileMaterial diagonalMat = diagonalSource.get(corner.diagonal);
-            if (diagonalMat != null)
-            {
-                cornerMat = diagonalMat;
-                sourceDir = corner.diagonal;
-            }
-
-            if (cornerMat == null)
+            if (diagonalMat == null)
             {
                 continue;
             }
 
-            PixelMask mask = cornerMask(cornerMat, corner, cellX, cellY);
+            PixelMask mask = cornerMask(diagonalMat, corner, cellX, cellY);
             if (mask != null && mask.isAnyOpaque())
             {
-                contributions.add(new Contribution(cornerMat, mask, sourceDir, true));
+                contributions.add(new Contribution(
+                        diagonalMat, mask, corner.diagonal, true));
             }
         }
 
@@ -180,9 +256,21 @@ public final class TransitionResolver
      * Mask-first ownership. Different materials share a cell by proximity to
      * their source edge. Small gaps (≤4px) between opposing fringes are bridged
      * so they meet cleanly without one filling the whole cell.
+     * When heavily surrounded, a tiny center core stays with the base tile.
      */
-    private Contribution pickWinner(List<Contribution> contributions, int px, int py)
+    private Contribution pickWinner(
+            List<Contribution> contributions,
+            int px,
+            int py,
+            int cellX,
+            int cellY,
+            boolean revealCore)
     {
+        if (revealCore && inBaseRevealCore(px, py, cellX, cellY))
+        {
+            return null;
+        }
+
         Contribution bestMasked = null;
         for (Contribution c : contributions)
         {
@@ -206,6 +294,53 @@ public final class TransitionResolver
     }
 
     /**
+     * True when expanders approach from at least 3 sides — the case where a lone
+     * lower-layer tile would otherwise disappear under neighbor fringes/bevels.
+     */
+    private static boolean isHeavilySurrounded(List<Contribution> contributions)
+    {
+        boolean north = false;
+        boolean east = false;
+        boolean south = false;
+        boolean west = false;
+        for (Contribution c : contributions)
+        {
+            Direction d = c.fromDir;
+            if (d == Direction.UP || d == Direction.UP_LEFT || d == Direction.UP_RIGHT)
+            {
+                north = true;
+            }
+            if (d == Direction.RIGHT || d == Direction.UP_RIGHT || d == Direction.DOWN_RIGHT)
+            {
+                east = true;
+            }
+            if (d == Direction.DOWN || d == Direction.DOWN_LEFT || d == Direction.DOWN_RIGHT)
+            {
+                south = true;
+            }
+            if (d == Direction.LEFT || d == Direction.UP_LEFT || d == Direction.DOWN_LEFT)
+            {
+                west = true;
+            }
+        }
+        int sides = (north ? 1 : 0) + (east ? 1 : 0) + (south ? 1 : 0) + (west ? 1 : 0);
+        return sides >= 3;
+    }
+
+    /** Soft irregular island near the cell center (~3–5 px). */
+    private boolean inBaseRevealCore(int px, int py, int cellX, int cellY)
+    {
+        float cx = (tileSize - 1) * 0.5f;
+        float cy = (tileSize - 1) * 0.5f;
+        float dx = px - cx;
+        float dy = py - cy;
+        int seed = ExpansionMaskGenerator.hash(cellX, cellY, px / 2, py / 2);
+        float wobble = 0.7f * (float) Math.sin((px * 1.1f + py * 0.9f) + (seed & 7));
+        float radius = 3.6f + wobble;
+        return dx * dx + dy * dy <= radius * radius;
+    }
+
+    /**
      * When two different materials push toward each other but leave a thin gap,
      * fill those pixels with the nearer fringe so the seam reads continuous.
      */
@@ -226,7 +361,7 @@ public final class TransitionResolver
         for (Contribution c : contributions)
         {
             int depth = depthFromSource(c, px, py);
-            int reach = maxOpaqueDepth(c, px, py);
+            int reach = reachOf(c);
             if (reach < 0)
             {
                 continue;
@@ -259,6 +394,12 @@ public final class TransitionResolver
         }
 
         if (bestA == null || bestB == null)
+        {
+            return null;
+        }
+        // Cross-family bridges (grass↔dirt on stone) fill the gap with speckles.
+        // Only close seams between the same family / material.
+        if (bestA.material.getFamily() != bestB.material.getFamily())
         {
             return null;
         }
@@ -298,57 +439,17 @@ public final class TransitionResolver
         return da + db <= tileSize + 2;
     }
 
-    /** How far this contribution's mask reaches along the ray from its source through (px,py). */
-    private int maxOpaqueDepth(Contribution c, int px, int py)
+    /**
+     * Max opaque depth for a contribution, computed once and cached.
+     * Avoids O(n²) corner rescans on every pixel during buildImage/bridgeGap.
+     */
+    private int reachOf(Contribution c)
     {
-        int max = -1;
-        if (!c.corner)
+        if (c.cachedReach != Contribution.REACH_UNCACHED)
         {
-            switch (c.fromDir)
-            {
-                case UP -> {
-                    for (int y = 0; y < tileSize; y++)
-                    {
-                        if (c.mask.getAlpha(px, y) > 0)
-                        {
-                            max = y;
-                        }
-                    }
-                }
-                case DOWN -> {
-                    for (int y = tileSize - 1; y >= 0; y--)
-                    {
-                        if (c.mask.getAlpha(px, y) > 0)
-                        {
-                            max = tileSize - 1 - y;
-                        }
-                    }
-                }
-                case LEFT -> {
-                    for (int x = 0; x < tileSize; x++)
-                    {
-                        if (c.mask.getAlpha(x, py) > 0)
-                        {
-                            max = x;
-                        }
-                    }
-                }
-                case RIGHT -> {
-                    for (int x = tileSize - 1; x >= 0; x--)
-                    {
-                        if (c.mask.getAlpha(x, py) > 0)
-                        {
-                            max = tileSize - 1 - x;
-                        }
-                    }
-                }
-                default -> {
-                }
-            }
-            return max;
+            return c.cachedReach;
         }
-
-        // Corner: farthest opaque chebyshev distance from the corner origin
+        int max = -1;
         for (int y = 0; y < tileSize; y++)
         {
             for (int x = 0; x < tileSize; x++)
@@ -357,17 +458,10 @@ public final class TransitionResolver
                 {
                     continue;
                 }
-                int d = switch (c.fromDir)
-                {
-                    case UP_LEFT -> Math.max(x, y);
-                    case UP_RIGHT -> Math.max(tileSize - 1 - x, y);
-                    case DOWN_LEFT -> Math.max(x, tileSize - 1 - y);
-                    case DOWN_RIGHT -> Math.max(tileSize - 1 - x, tileSize - 1 - y);
-                    default -> Math.min(x, y);
-                };
-                max = Math.max(max, d);
+                max = Math.max(max, depthFromSource(c, x, y));
             }
         }
+        c.cachedReach = max;
         return max;
     }
 
@@ -382,24 +476,28 @@ public final class TransitionResolver
             return depthB < depthA ? b : a;
         }
 
-        // Different materials: proximity first so fringes meet smoothly.
-        // When depths are nearly equal, higher dominance layer wins.
-        if (Math.abs(depthA - depthB) > 2)
-        {
-            return depthB < depthA ? b : a;
-        }
-
         int layerCmp = Integer.compare(
                 b.material.getDominanceLayer(), a.material.getDominanceLayer());
         if (layerCmp != 0)
         {
+            // Cross-layer (grass vs dirt on stone, etc.): hierarchy wins in the
+            // contested band so lower fringes don't speck through higher ones.
+            // Only let proximity override when clearly deep in one fringe.
+            if (Math.abs(depthA - depthB) > 5)
+            {
+                return depthB < depthA ? b : a;
+            }
             return layerCmp > 0 ? b : a;
         }
+
+        // Same-layer peers: nearness, then dither on a dead heat.
         if (depthB != depthA)
         {
             return depthB < depthA ? b : a;
         }
-        return b.material.getId() > a.material.getId() ? b : a;
+        int h = ExpansionMaskGenerator.hash(
+                px, py, a.material.getId(), b.material.getId());
+        return (h & 1) == 0 ? a : b;
     }
 
     private int depthFromSource(Contribution c, int px, int py)
@@ -426,16 +524,18 @@ public final class TransitionResolver
         };
     }
 
-    private List<MaterialRegion> bakeExclusiveOverlays(List<Contribution> contributions)
+    private List<MaterialRegion> bakeExclusiveOverlays(
+            List<Contribution> contributions, int cellX, int cellY)
     {
         java.util.LinkedHashMap<Integer, MaterialRegionBuilder> builders =
                 new java.util.LinkedHashMap<>();
+        boolean revealCore = isHeavilySurrounded(contributions);
 
         for (int py = 0; py < tileSize; py++)
         {
             for (int px = 0; px < tileSize; px++)
             {
-                Contribution winner = pickWinner(contributions, px, py);
+                Contribution winner = pickWinner(contributions, px, py, cellX, cellY, revealCore);
                 if (winner == null)
                 {
                     continue;
@@ -535,10 +635,14 @@ public final class TransitionResolver
 
     private static final class Contribution
     {
+        static final int REACH_UNCACHED = -2;
+
         final TileMaterial material;
         final PixelMask mask;
         final Direction fromDir;
         final boolean corner;
+        /** Lazily filled by {@link TransitionResolver#reachOf}; -1 = empty mask. */
+        int cachedReach = REACH_UNCACHED;
 
         Contribution(TileMaterial material, PixelMask mask, Direction fromDir, boolean corner)
         {

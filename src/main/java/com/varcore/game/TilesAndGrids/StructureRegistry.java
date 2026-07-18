@@ -27,13 +27,24 @@ public class StructureRegistry
     {
         public final int dy;
         public final int tileId;
+        /** Extra world-pixel lift (negative = up). Applied after cell offset. */
+        public final int pixelOffsetY;
 
         public VisualPart(int dy, int tileId)
         {
+            this(dy, tileId, 0);
+        }
+
+        public VisualPart(int dy, int tileId, int pixelOffsetY)
+        {
             this.dy = dy;
             this.tileId = tileId;
+            this.pixelOffsetY = pixelOffsetY;
         }
     }
+
+    /** Raise the whole column-wall stack this many world pixels (foot + mid + cap). */
+    public static final int COLUMN_WALL_LIFT_PX = 16;
 
     private final List<StructureDefinition> structures = new ArrayList<>();
     private final Map<Integer, StructureDefinition> byBrush = new HashMap<>();
@@ -168,14 +179,15 @@ public class StructureRegistry
         {
             List<VisualPart> parts = new ArrayList<>();
             int h = def.getStackHeight();
-            parts.add(new VisualPart(0, def.getFootTileId()));
+            int lift = -COLUMN_WALL_LIFT_PX;
+            parts.add(new VisualPart(0, def.getFootTileId(), lift));
             for (int i = 1; i < h - 1; i++)
             {
-                parts.add(new VisualPart(-i, def.getMiddleTileId()));
+                parts.add(new VisualPart(-i, def.getMiddleTileId(), lift));
             }
             if (h >= 2)
             {
-                parts.add(new VisualPart(-(h - 1), def.getCapTileId()));
+                parts.add(new VisualPart(-(h - 1), def.getCapTileId(), lift));
             }
             return parts;
         }

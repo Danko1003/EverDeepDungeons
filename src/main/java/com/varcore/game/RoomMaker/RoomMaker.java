@@ -40,6 +40,7 @@ public class RoomMaker
     private final RoomSettingsPanel settings;
     private final EditorButton clearButton;
     private final Font hintFont = new Font("Segoe UI", Font.PLAIN, 12);
+    private float animTime;
 
     private int hoverGX = -1;
     private int hoverGY = -1;
@@ -98,6 +99,8 @@ public class RoomMaker
     public void update(InputManager input, float dt, int screenW, int screenH)
     {
         camera.setViewportSize(screenW, screenH);
+        animTime += dt;
+        gridRenderer.setAnimTime(animTime);
 
         float settingsW = clamp(screenW * 0.20f, 180f, 280f);
         float paletteW = clamp(screenW * 0.21f, 190f, 310f);
@@ -493,6 +496,11 @@ public class RoomMaker
         float worldLeft = grid.getWorldX() + hoverGX * tileSize;
         float worldTop = grid.getWorldY() + topGy * tileSize;
         float worldBottom = grid.getWorldY() + (hoverGY + 1) * tileSize;
+        if (structureBrush)
+        {
+            worldTop -= StructureRegistry.COLUMN_WALL_LIFT_PX;
+            worldBottom -= StructureRegistry.COLUMN_WALL_LIFT_PX;
+        }
 
         int drawX = Math.round((worldLeft - camera.getCamX()) * zoom);
         int drawY = Math.round((worldTop - camera.getCamY()) * zoom);

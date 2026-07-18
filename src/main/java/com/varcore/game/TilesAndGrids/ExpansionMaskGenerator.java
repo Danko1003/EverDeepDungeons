@@ -232,4 +232,85 @@ public final class ExpansionMaskGenerator
         h = h ^ (h >>> 16);
         return h;
     }
+
+    /**
+     * Deep, scalloped invasion used when burnable grass eats into burnt dirt.
+     * Breaks square tile silhouettes on the burnt side only (no spill onto grass).
+     */
+    public static PixelMask generateBurnInvasionEdge(Direction direction, int variant, int seed)
+    {
+        PixelMask mask = PixelMask.empty(SIZE);
+        int maxDepth = 12;
+        for (int i = 0; i < SIZE; i++)
+        {
+            double t = i / (double) (SIZE - 1);
+            double lobe = 0.62 + 0.38 * Math.sin(Math.PI * t + variant * 0.7);
+            double scallop = 0.14 * Math.sin(i * 0.55 + seed * 0.01);
+            int depth = (int) Math.round(maxDepth * (lobe + scallop));
+            depth += ((hash(seed, i / 2, variant, 41) & 5) - 2);
+            depth = Math.max(7, Math.min(SIZE - 3, depth));
+            for (int k = 0; k < depth; k++)
+            {
+                switch (direction)
+                {
+                    case UP -> mask.setAlpha(i, k, 255);
+                    case DOWN -> mask.setAlpha(i, SIZE - 1 - k, 255);
+                    case LEFT -> mask.setAlpha(k, i, 255);
+                    case RIGHT -> mask.setAlpha(SIZE - 1 - k, i, 255);
+                    default -> {
+                    }
+                }
+            }
+        }
+        return mask;
+    }
+
+    /** Soft quarter-blob corner for burn invasion / char spill. */
+    public static PixelMask generateBurnInvasionCorner(Corner corner, int variant, int seed)
+    {
+        PixelMask mask = PixelMask.empty(SIZE);
+        int arm = 12 + (variant & 3);
+        for (int y = 0; y <= arm + 2; y++)
+        {
+            for (int x = 0; x <= arm + 2; x++)
+            {
+                double nx = x / (double) arm;
+                double ny = y / (double) arm;
+                double wobble = 0.12 * Math.sin((x + y) * 0.55 + seed * 0.02 + variant);
+                if (nx * nx + ny * ny <= 1.05 + wobble)
+                {
+                    int px;
+                    int py;
+                    switch (corner)
+                    {
+                        case TOP_LEFT -> {
+                            px = x;
+                            py = y;
+                        }
+                        case TOP_RIGHT -> {
+                            px = SIZE - 1 - x;
+                            py = y;
+                        }
+                        case BOTTOM_LEFT -> {
+                            px = x;
+                            py = SIZE - 1 - y;
+                        }
+                        case BOTTOM_RIGHT -> {
+                            px = SIZE - 1 - x;
+                            py = SIZE - 1 - y;
+                        }
+                        default -> {
+                            px = x;
+                            py = y;
+                        }
+                    }
+                    if (px >= 0 && py >= 0 && px < SIZE && py < SIZE)
+                    {
+                        mask.setAlpha(px, py, 255);
+                    }
+                }
+            }
+        }
+        return mask;
+    }
 }
